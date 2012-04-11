@@ -89,6 +89,7 @@ struct battery_info {
 	s32 batt_vol;			/* Battery voltage from ADC */
 	s32 batt_temp;			/* Battery Temperature (C) from ADC */
 	s32 batt_current;		/* Battery current from ADC */
+	s32 force_usb_charging; /*Allow USB charging */
 #if defined(CONFIG_TARGET_LOCALE_KOR_SKT) || defined(CONFIG_TARGET_LOCALE_KOR_KT) || defined(CONFIG_TARGET_LOCALE_KOR_LGU)
 	s32 batt_current_avg;	/* Battery current average */
 	s32 batt_soc;			/* Battery SOC */
@@ -563,7 +564,9 @@ static int p5_get_bat_level(struct power_supply *bat_ps)
 #else
 	if(battery->info.charging_enabled &&  // Charging is enabled
 		!battery->info.batt_is_recharging &&  // Not Recharging
-		battery->info.charging_source == CHARGER_AC &&  // Only AC (Not USB cable)
+		(battery->info.charging_source == CHARGER_AC ||
+		(battery->info.charging_source == CHARGER_USB &&
+		battery->info.force_usb_charging)) &&
 		!battery->is_first_check &&  // Skip when first check after boot up
 		(fg_vfsoc>70 && (fg_current>20 && fg_current<250) &&
 		(avg_current>20 && avg_current<260))) {
@@ -582,8 +585,9 @@ static int p5_get_bat_level(struct power_supply *bat_ps)
 	else
 		battery->full_check_flag = 0;
 
-	/* Abs Timer Routine */
-	if (battery->info.charging_source == CHARGER_AC &&
+	if ((battery->info.charging_source == CHARGER_AC ||
+		(battery->info.charging_source == CHARGER_USB &&
+		battery->info.force_usb_charging)) &&
 		battery->info.batt_improper_ta == 0) {
 		if (is_over_abs_time(battery)) {
 			//fg_soc = 100;  
@@ -672,7 +676,7 @@ __end__:
 		battery->is_first_check = false;
 
 	if (battery->info.batt_is_full &&
-		(battery->info.charging_source != CHARGER_USB))
+		(battery->info.charging_source != CHARGER_USB || battery->info.force_usb_charging))
 		fg_soc = 100;
 #if 0 //not used	
 	else {
@@ -752,6 +756,9 @@ static void p5_set_chg_en(struct battery_data *battery, int enable)
 				gpio_set_value_cansleep(charger_enable_line, 0);
 			} else if (battery->current_cable_status == CHARGER_USB) {
 				pr_info("USB charger!!");
+				if (battery->info.force_usb_charging)
+					p5_set_charging(battery, 1);
+				else
 				p5_set_charging(battery, 2);
 				gpio_set_value_cansleep(charger_enable_line, 0);
 			} else {
@@ -1024,6 +1031,7 @@ static struct device_attribute p5_battery_attrs[] = {
 	SEC_BATTERY_ATTR(batt_vol),
 	SEC_BATTERY_ATTR(batt_temp),
 	SEC_BATTERY_ATTR(batt_temp_cels),
+	SEC_BATTERY_ATTR(force_usb_charging),
 	SEC_BATTERY_ATTR(charging_source),
 	SEC_BATTERY_ATTR(batt_read_raw_soc),
 	SEC_BATTERY_ATTR(batt_reset_soc),
@@ -1053,6 +1061,7 @@ enum {
 	BATT_VOL = 0,
 	BATT_TEMP,
 	BATT_TEMP_CELS,
+	FORCE_USB_CHARGING,
 	BATT_CHARGING_SOURCE,
 	BATT_FG_RAW_SOC,
 	BATT_RESET_SOC,
@@ -1124,6 +1133,10 @@ static ssize_t p5_bat_show_property(struct device *dev,
 	case BATT_CHARGING_SOURCE:
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
 			test_batterydata->info.charging_source);
+		break;
+	case FORCE_USB_CHARGING:
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
+		test_batterydata->info.force_usb_charging);
 		break;
 	case BATT_FG_RAW_SOC:
 #if defined(CONFIG_TARGET_LOCALE_KOR_SKT) || defined(CONFIG_TARGET_LOCALE_KOR_KT) || defined(CONFIG_TARGET_LOCALE_KOR_LGU)
@@ -1236,6 +1249,16 @@ static ssize_t p5_bat_store(struct device *dev,
 	int ret = 0;
 	const ptrdiff_t off = attr - p5_battery_attrs;
 	switch (off) {
+	case FORCE_USB_CHARGING:
+		if (sscanf(buf, "%d\n", &x) == 1) {
+			if (x == 1)
+				test_batterydata->info.force_usb_charging = true;
+			else
+				test_batterydata->info.force_usb_charging = false;
+				ret = count;
+				p5_bat_status_update(&test_batterydata->psy_battery);
+		}
+		break;
 	case BATT_RESET_SOC:
 		if (sscanf(buf, "%d\n", &x) == 1) {
 			if (x == 1) {
@@ -2006,6 +2029,8 @@ static int __devinit p5_bat_probe(struct platform_device *pdev)
 		"test mode wake lock");
 #endif /* __TEST_DEVICE_DRIVER__ */
 
+	//set forcing	
+	battery->info.force_usb_charging = 1;
 	//initialize current cable status
 	set_charger_status(battery);
 
@@ -2141,7 +2166,9 @@ static int __devinit p5_bat_probe(struct platform_device *pdev)
 	p5_cable_check_status(battery);
 
 	/* before enable fullcharge interrupt, check fullcharge */
-	if (battery->info.charging_source == CHARGER_AC
+	if ((battery->info.charging_source == CHARGER_AC ||
+		(battery->info.charging_source == CHARGER_USB &&
+		battery->info.force_usb_charging))
 		&& battery->info.charging_enabled
 		&& gpio_get_value_cansleep(pdata->charger.fullcharge_line) == 1) {
 		printk("BAT %s : full charge line is high\r\n", __func__);
