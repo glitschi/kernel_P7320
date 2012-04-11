@@ -47,6 +47,7 @@
 #define	USE_VIDEO_SIZE
 
 //#define CONFIG_LOAD_FILE
+#define CAMERA_ESD_TEST_CODE
 
 #ifdef CONFIG_LOAD_FILE
 #define S5K5CCAF_WRITE_LIST(A)	s5k5ccaf_sensor_write_list(A,(sizeof(A) / sizeof(A[0])),#A);

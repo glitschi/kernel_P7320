@@ -44,6 +44,7 @@
 #include "s5k5bafx_regs.h"
 #endif
 
+#define CAMERA_ESD_TEST_CODE
 #define SENSOR_DEBUG 0
 
 //#define CONFIG_LOAD_FILE	

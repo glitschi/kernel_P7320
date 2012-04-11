@@ -42,6 +42,7 @@
 
 #include "sec_cam_pmic.h"
 
+#define CAMERA_ESD_TEST_CODE
 
 DEFINE_MUTEX(ctrl_cmd_lock);
 /*
@@ -77,6 +78,9 @@ int g_v4l2_opencnt;
 static int camera_node;
 static enum msm_camera_type camera_type[MSM_MAX_CAMERA_SENSORS];
 static uint32_t sensor_mount_angle[MSM_MAX_CAMERA_SENSORS];
+
+int s5k5ccaf_sensor_esd_detected();
+int s5k5bafx_sensor_esd_detected();
 
 static const char *vfe_config_cmd[] = {
 	"CMD_GENERAL",  /* 0 */
