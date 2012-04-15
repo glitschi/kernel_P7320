@@ -917,8 +917,25 @@ static int p5_bat_get_charging_status(struct battery_data *battery)
 	/* need to check with lpm application engineer */
 	switch (battery->info.charging_source) {
 		case CHARGER_BATTERY:
-		case CHARGER_USB:
 			return POWER_SUPPLY_STATUS_DISCHARGING;
+		case CHARGER_USB:
+		{
+		    int i_current;
+		    int i_avg_current;
+		    if(lpm_mode_flag)
+		      return POWER_SUPPLY_STATUS_DISCHARGING; //original feedback for lpm mode
+		    //fully loaded?
+		    if (battery->info.batt_is_full || battery->info.level == 100)
+			return POWER_SUPPLY_STATUS_FULL;
+			
+		    //get current and decide if we are charging or not
+		    i_current = get_fuelgauge_value(FG_CURRENT);
+		    i_avg_current = get_fuelgauge_value(FG_CURRENT_AVG);
+		    if(i_current > 0 || i_avg_current > 0)		    
+			return POWER_SUPPLY_STATUS_CHARGING;
+		    else
+		      return POWER_SUPPLY_STATUS_DISCHARGING;
+		}
 		case CHARGER_AC:
 #if defined(CONFIG_TARGET_LOCALE_KOR_SKT) || defined(CONFIG_TARGET_LOCALE_KOR_KT) || defined(CONFIG_TARGET_LOCALE_KOR_LGU)
 			if (battery->info.batt_is_full ||
